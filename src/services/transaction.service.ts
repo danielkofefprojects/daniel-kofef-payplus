@@ -2,6 +2,7 @@ import { and, desc, eq, gte, sql, sum } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   DeclineReason,
+  ledgerEntries,
   merchants,
   TransactionStatus,
   transactions,
@@ -70,16 +71,37 @@ const credit = (tx: Tx, walletId: number, amount: number) => {
     .run();
 };
 
+// Only approved transactions reach the ledger; it runs in the same DB transaction as the
+// balance change, so the two can never diverge.
+const appendLedgerEntry = (tx: Tx, t: Transaction) => {
+  tx.insert(ledgerEntries)
+    .values({
+      walletId: t.walletId,
+      transactionId: t.id,
+      type: t.type,
+      amount: t.amount,
+      currency: t.currency,
+    })
+    .run();
+};
+
 const insertTransaction = (
   tx: Tx,
   values: Omit<typeof transactions.$inferInsert, 'id' | 'status' | 'declineReason' | 'createdAt' | 'updatedAt'>,
   declineReason: DeclineReason | null,
-) =>
-  tx
+) => {
+  const transaction = tx
     .insert(transactions)
     .values({ ...values, status: declineReason ? TransactionStatus.DECLINED : TransactionStatus.APPROVED, declineReason })
     .returning()
     .get();
+  if (transaction.status === TransactionStatus.APPROVED) appendLedgerEntry(tx, transaction);
+  return transaction;
+};
+
+/** Returns the reason of the first rule that fails (condition is true), or null if none do. */
+const firstFailure = (rules: [failed: boolean, reason: DeclineReason][]): DeclineReason | null =>
+  rules.find(([failed]) => failed)?.[1] ?? null;
 
 /**
  * Each operation runs in one DB transaction (idempotency check + balance change + transaction row),
@@ -97,12 +119,14 @@ export const transactionService = {
       const wallet = getWalletOrThrow(tx, input.walletId);
       const merchant = getMerchantOrThrow(tx, input.merchantId);
 
-      let reason: DeclineReason | null = null;
-      if (wallet.merchantId !== merchant.id) reason = DeclineReason.WALLET_MERCHANT_MISMATCH;
-      else if (wallet.status !== 'ACTIVE') reason = DeclineReason.WALLET_INACTIVE;
-      else if (merchant.status !== 'ACTIVE') reason = DeclineReason.MERCHANT_INACTIVE;
-      else if (wallet.currency !== input.currency) reason = DeclineReason.CURRENCY_MISMATCH;
-      else if (!debit(tx, wallet.id, input.amount)) reason = DeclineReason.INSUFFICIENT_FUNDS;
+      // Checked in order; the first failing rule wins. Debit has a side effect, so it runs only if all pass.
+      const reason =
+        firstFailure([
+          [wallet.merchantId !== merchant.id, DeclineReason.WALLET_MERCHANT_MISMATCH],
+          [wallet.status !== 'ACTIVE', DeclineReason.WALLET_INACTIVE],
+          [merchant.status !== 'ACTIVE', DeclineReason.MERCHANT_INACTIVE],
+          [wallet.currency !== input.currency, DeclineReason.CURRENCY_MISMATCH],
+        ]) ?? (debit(tx, wallet.id, input.amount) ? null : DeclineReason.INSUFFICIENT_FUNDS);
 
       const transaction = insertTransaction(
         tx,
@@ -144,11 +168,12 @@ export const transactionService = {
         )
         .all();
 
-      let reason: DeclineReason | null = null;
-      if (wallet.status !== 'ACTIVE') reason = DeclineReason.WALLET_INACTIVE;
-      else if (merchant.status !== 'ACTIVE') reason = DeclineReason.MERCHANT_INACTIVE;
-      else if ((refunded ?? 0) + input.amount > original.amount) reason = DeclineReason.REFUND_EXCEEDS_ORIGINAL;
-      else credit(tx, wallet.id, input.amount);
+      const reason = firstFailure([
+        [wallet.status !== 'ACTIVE', DeclineReason.WALLET_INACTIVE],
+        [merchant.status !== 'ACTIVE', DeclineReason.MERCHANT_INACTIVE],
+        [(refunded ?? 0) + input.amount > original.amount, DeclineReason.REFUND_EXCEEDS_ORIGINAL],
+      ]);
+      if (!reason) credit(tx, wallet.id, input.amount);
 
       const transaction = insertTransaction(
         tx,

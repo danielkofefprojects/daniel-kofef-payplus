@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Currency } from '../db/schema';
 
 // All schemas are strict: unknown fields are rejected, not silently dropped.
 
@@ -16,11 +17,11 @@ export const amount = z
   .int({ error: 'amount must be an integer in minor units' })
   .positive('amount must be greater than 0');
 
-/** ISO-4217 style 3-letter code, normalised to upper case. */
+/** Supported currency (EUR, ILS, USD), case-insensitive, normalised to upper case. */
 export const currency = z
   .string()
-  .regex(/^[A-Za-z]{3}$/, 'currency must be a 3-letter code, e.g. ILS')
-  .transform((c) => c.toUpperCase());
+  .transform((c) => c.toUpperCase())
+  .pipe(z.enum(Currency, { error: `currency must be one of ${Object.values(Currency).join(', ')}` }));
 
 export const statusEnum = z.enum(['ACTIVE', 'INACTIVE']);
 

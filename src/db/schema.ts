@@ -16,6 +16,17 @@ const timestamps = {
   updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 };
 
+const enumValues = <T extends string>(e: Record<string, T>) => Object.values(e) as [T, ...T[]];
+
+export enum Currency {
+  EUR = 'EUR',
+  ILS = 'ILS',
+  USD = 'USD',
+}
+
+const currencyCheck = (column: AnySQLiteColumn) =>
+  sql`${column} IN (${sql.join(Object.values(Currency).map((v) => sql.raw(`'${v}'`)), sql`, `)})`;
+
 export const merchantStatuses = ['ACTIVE', 'INACTIVE'] as const;
 
 export const merchants = sqliteTable(
@@ -41,14 +52,14 @@ export const wallets = sqliteTable(
     merchantId: integer('merchant_id')
       .notNull()
       .references(() => merchants.id),
-    currency: text('currency').notNull(),
+    currency: text('currency', { enum: enumValues(Currency) }).notNull(),
     balance: integer('balance').notNull().default(0),
     status: text('status', { enum: walletStatuses }).notNull().default('ACTIVE'),
     ...timestamps,
   },
   (t) => [
     check('wallets_balance_non_negative', sql`${t.balance} >= 0`),
-    check('wallets_currency_iso', sql`length(${t.currency}) = 3`),
+    check('wallets_currency_valid', currencyCheck(t.currency)),
     check('wallets_status_valid', sql`${t.status} IN ('ACTIVE', 'INACTIVE')`),
     index('wallets_merchant_idx').on(t.merchantId),
   ],
@@ -73,8 +84,6 @@ export enum DeclineReason {
   WALLET_MERCHANT_MISMATCH = 'WALLET_MERCHANT_MISMATCH',
 }
 
-const enumValues = <T extends string>(e: Record<string, T>) => Object.values(e) as [T, ...T[]];
-
 export const transactions = sqliteTable(
   'transactions',
   {
@@ -87,7 +96,7 @@ export const transactions = sqliteTable(
       .references(() => merchants.id),
     type: text('type', { enum: enumValues(TransactionType) }).notNull(),
     amount: integer('amount').notNull(),
-    currency: text('currency').notNull(),
+    currency: text('currency', { enum: enumValues(Currency) }).notNull(),
     status: text('status', { enum: enumValues(TransactionStatus) }).notNull(),
     declineReason: text('decline_reason', { enum: enumValues(DeclineReason) }),
     // Set only for refunds: the charge being refunded.
@@ -106,6 +115,7 @@ export const transactions = sqliteTable(
     index('transactions_wallet_idx').on(t.walletId),
     index('transactions_original_idx').on(t.originalTransactionId),
     check('transactions_amount_positive', sql`${t.amount} > 0`),
+    check('transactions_currency_valid', currencyCheck(t.currency)),
     check('transactions_type_valid', sql`${t.type} IN (${sql.join(enumValues(TransactionType).map((v) => sql.raw(`'${v}'`)), sql`, `)})`),
     check('transactions_status_valid', sql`${t.status} IN ('APPROVED', 'DECLINED')`),
     // A refund must point at a charge; a charge must not.
@@ -121,6 +131,34 @@ export const transactions = sqliteTable(
   ],
 );
 
+// Append-only: rows are only ever inserted, and only for APPROVED transactions (one entry each).
+// UPDATE / DELETE are blocked by triggers (see the ledger_append_only migration), and the
+// insert trigger rejects entries for declined or mismatching transactions.
+export const ledgerEntries = sqliteTable(
+  'ledger_entries',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    walletId: integer('wallet_id')
+      .notNull()
+      .references(() => wallets.id),
+    transactionId: integer('transaction_id')
+      .notNull()
+      .references(() => transactions.id),
+    type: text('type', { enum: enumValues(TransactionType) }).notNull(),
+    amount: integer('amount').notNull(),
+    currency: text('currency', { enum: enumValues(Currency) }).notNull(),
+    timestamp: text('timestamp').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex('ledger_entries_transaction_uq').on(t.transactionId),
+    index('ledger_entries_wallet_idx').on(t.walletId),
+    check('ledger_entries_amount_positive', sql`${t.amount} > 0`),
+    check('ledger_entries_currency_valid', currencyCheck(t.currency)),
+    check('ledger_entries_type_valid', sql`${t.type} IN ('CHARGE', 'REFUND')`),
+  ],
+);
+
 export type Wallet = typeof wallets.$inferSelect;
 export type Merchant = typeof merchants.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
+export type LedgerEntry = typeof ledgerEntries.$inferSelect;

@@ -8,6 +8,27 @@
       "when": 1792919478290,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792920480475,
+      "tag": "0001_ledger_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792920480995,
+      "tag": "0002_ledger_append_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792921416987,
+      "tag": "0003_currency_enum",
+      "breakpoints": true
     }
   ]
 }

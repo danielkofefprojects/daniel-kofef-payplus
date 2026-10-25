@@ -48,4 +48,5 @@ POST  /merchants              GET /merchants        GET /merchants/:id     PATCH
 POST  /wallets                GET /wallets          GET /wallets/:id       PATCH /wallets/:id/status
 POST  /transactions/charge    POST /transactions/refund
 GET   /transactions           GET /transactions/:id
+GET   /ledger                 (paginated, append-only)
 ```
