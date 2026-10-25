@@ -10,6 +10,8 @@ const declineMessages: Record<DeclineReason, (t: Transaction) => string> = {
   [DeclineReason.WALLET_INACTIVE]: (t) => `Wallet ${t.walletId} is inactive`,
   [DeclineReason.MERCHANT_INACTIVE]: (t) => `Merchant ${t.merchantId} is inactive`,
   [DeclineReason.CURRENCY_MISMATCH]: (t) => `Charge currency ${t.currency} does not match the wallet currency`,
+  [DeclineReason.ORIGINAL_NOT_REFUNDABLE]: (t) =>
+    `Transaction ${t.originalTransactionId} is not an approved charge, so it can't be refunded`,
   [DeclineReason.WALLET_MERCHANT_MISMATCH]: (t) => `Wallet ${t.walletId} does not belong to merchant ${t.merchantId}`,
   [DeclineReason.REFUND_EXCEEDS_ORIGINAL]: (t) =>
     `Refund of ${t.amount} would exceed the original charge ${t.originalTransactionId}`,
@@ -40,7 +42,8 @@ export const transactionController = {
   },
 
   list(req: Request, res: Response) {
-    res.json(transactionService.list(req.query as never).map(toResponse));
+    const { data, ...page } = transactionService.list(req.query as never);
+    res.json({ data: data.map(toResponse), ...page });
   },
 
   getById(req: Request, res: Response) {

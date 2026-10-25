@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TransactionStatus, TransactionType } from '../db/schema';
-import { amount, currency, id, idParam } from './common';
+import { amount, currency, id, idParam, paginationQuery } from './common';
 
 export const chargeSchema = z.strictObject({
   walletId: id,
@@ -15,6 +15,7 @@ export const refundSchema = z.strictObject({
 });
 
 export const listTransactionsQuery = z.strictObject({
+  ...paginationQuery,
   walletId: idParam.optional(),
   merchantId: idParam.optional(),
   type: z.enum(TransactionType).optional(),

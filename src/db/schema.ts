@@ -24,26 +24,32 @@ export enum Currency {
   USD = 'USD',
 }
 
-const currencyCheck = (column: AnySQLiteColumn) =>
-  sql`${column} IN (${sql.join(Object.values(Currency).map((v) => sql.raw(`'${v}'`)), sql`, `)})`;
+export enum Status {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+}
 
-export const merchantStatuses = ['ACTIVE', 'INACTIVE'] as const;
+// CHECK constraints can't use bound parameters, so enum members are inlined as SQL string literals.
+// Safe because the inputs are compile-time enum constants, never user input.
+const literal = (value: string) => sql.raw(`'${value}'`);
+
+// CHECK (column IN (<all values of the enum>)), so the DB and the TS enum can't drift apart.
+const enumCheck = (column: AnySQLiteColumn, e: Record<string, string>) =>
+  sql`${column} IN (${sql.join(Object.values(e).map(literal), sql`, `)})`;
 
 export const merchants = sqliteTable(
   'merchants',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     name: text('name').notNull(),
-    status: text('status', { enum: merchantStatuses }).notNull().default('ACTIVE'),
+    status: text('status', { enum: enumValues(Status) }).notNull().default(Status.ACTIVE),
     ...timestamps,
   },
   (t) => [
     check('merchants_name_not_empty', sql`length(trim(${t.name})) > 0`),
-    check('merchants_status_valid', sql`${t.status} IN ('ACTIVE', 'INACTIVE')`),
+    check('merchants_status_valid', enumCheck(t.status, Status)),
   ],
 );
-
-export const walletStatuses = ['ACTIVE', 'INACTIVE'] as const;
 
 export const wallets = sqliteTable(
   'wallets',
@@ -54,13 +60,13 @@ export const wallets = sqliteTable(
       .references(() => merchants.id),
     currency: text('currency', { enum: enumValues(Currency) }).notNull(),
     balance: integer('balance').notNull().default(0),
-    status: text('status', { enum: walletStatuses }).notNull().default('ACTIVE'),
+    status: text('status', { enum: enumValues(Status) }).notNull().default(Status.ACTIVE),
     ...timestamps,
   },
   (t) => [
     check('wallets_balance_non_negative', sql`${t.balance} >= 0`),
-    check('wallets_currency_valid', currencyCheck(t.currency)),
-    check('wallets_status_valid', sql`${t.status} IN ('ACTIVE', 'INACTIVE')`),
+    check('wallets_currency_valid', enumCheck(t.currency, Currency)),
+    check('wallets_status_valid', enumCheck(t.status, Status)),
     index('wallets_merchant_idx').on(t.merchantId),
   ],
 );
@@ -81,6 +87,7 @@ export enum DeclineReason {
   INSUFFICIENT_FUNDS = 'INSUFFICIENT_FUNDS',
   CURRENCY_MISMATCH = 'CURRENCY_MISMATCH',
   REFUND_EXCEEDS_ORIGINAL = 'REFUND_EXCEEDS_ORIGINAL',
+  ORIGINAL_NOT_REFUNDABLE = 'ORIGINAL_NOT_REFUNDABLE',
   WALLET_MERCHANT_MISMATCH = 'WALLET_MERCHANT_MISMATCH',
 }
 
@@ -115,18 +122,22 @@ export const transactions = sqliteTable(
     index('transactions_wallet_idx').on(t.walletId),
     index('transactions_original_idx').on(t.originalTransactionId),
     check('transactions_amount_positive', sql`${t.amount} > 0`),
-    check('transactions_currency_valid', currencyCheck(t.currency)),
-    check('transactions_type_valid', sql`${t.type} IN (${sql.join(enumValues(TransactionType).map((v) => sql.raw(`'${v}'`)), sql`, `)})`),
-    check('transactions_status_valid', sql`${t.status} IN ('APPROVED', 'DECLINED')`),
+    check('transactions_currency_valid', enumCheck(t.currency, Currency)),
+    check('transactions_type_valid', enumCheck(t.type, TransactionType)),
+    check('transactions_status_valid', enumCheck(t.status, TransactionStatus)),
     // A refund must point at a charge; a charge must not.
     check(
       'transactions_refund_has_original',
-      sql`(${t.type} = 'REFUND') = (${t.originalTransactionId} IS NOT NULL)`,
+      sql`(${t.type} = ${literal(TransactionType.REFUND)}) = (${t.originalTransactionId} IS NOT NULL)`,
     ),
-    // Declined <=> has a reason.
+    // Declined <=> has a reason, and the reason must be a known one.
     check(
       'transactions_decline_reason',
-      sql`(${t.status} = 'DECLINED') = (${t.declineReason} IS NOT NULL)`,
+      sql`(${t.status} = ${literal(TransactionStatus.DECLINED)}) = (${t.declineReason} IS NOT NULL)`,
+    ),
+    check(
+      'transactions_decline_reason_valid',
+      sql`${t.declineReason} IS NULL OR ${enumCheck(t.declineReason, DeclineReason)}`,
     ),
   ],
 );
@@ -153,8 +164,8 @@ export const ledgerEntries = sqliteTable(
     uniqueIndex('ledger_entries_transaction_uq').on(t.transactionId),
     index('ledger_entries_wallet_idx').on(t.walletId),
     check('ledger_entries_amount_positive', sql`${t.amount} > 0`),
-    check('ledger_entries_currency_valid', currencyCheck(t.currency)),
-    check('ledger_entries_type_valid', sql`${t.type} IN ('CHARGE', 'REFUND')`),
+    check('ledger_entries_currency_valid', enumCheck(t.currency, Currency)),
+    check('ledger_entries_type_valid', enumCheck(t.type, TransactionType)),
   ],
 );
 

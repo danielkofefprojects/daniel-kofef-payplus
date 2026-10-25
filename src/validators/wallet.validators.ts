@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { currency, id, idParam, statusEnum } from './common';
+import { currency, id, idParam, paginationQuery, statusEnum } from './common';
 
 export const createWalletSchema = z.strictObject({
   merchantId: id,
@@ -9,6 +9,7 @@ export const createWalletSchema = z.strictObject({
 });
 
 export const listWalletsQuery = z.strictObject({
+  ...paginationQuery,
   status: statusEnum.optional(),
   merchantId: idParam.optional(),
   currency: currency.optional(),

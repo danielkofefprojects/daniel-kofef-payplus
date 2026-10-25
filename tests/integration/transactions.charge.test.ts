@@ -177,7 +177,7 @@ describe('POST /api/transactions/charge - invalid params', () => {
     const { merchant, wallet } = await setup();
     await charge({ walletId: wallet.id, merchantId: merchant.id, amount: -5, currency: 'ILS' });
     const list = await get(`/api/transactions?walletId=${wallet.id}`);
-    expect(list.body).toHaveLength(0);
+    expect(list.body.data).toHaveLength(0);
     expect(await balanceOf(wallet.id)).toBe(10_000);
   });
 });
@@ -284,5 +284,25 @@ describe('wallet created via API', () => {
     await charge({ walletId: usd.id, merchantId: merchant.id, amount: 400, currency: 'USD' });
     expect(await balanceOf(ils.id)).toBe(1_000);
     expect(await balanceOf(usd.id)).toBe(600);
+  });
+});
+
+describe('GET /api/transactions - pagination', () => {
+  it('pages newest first and reports totals', async () => {
+    const { merchant, wallet } = await setup();
+    for (let i = 1; i <= 3; i++) {
+      await charge({ walletId: wallet.id, merchantId: merchant.id, amount: 100, currency: 'ILS' }, `page-${i}`);
+    }
+    const first = await get(`/api/transactions?walletId=${wallet.id}&limit=2`);
+    expect(first.body).toMatchObject({ page: 1, limit: 2, total: 3, totalPages: 2 });
+    expect(first.body.data).toHaveLength(2);
+    const second = await get(`/api/transactions?walletId=${wallet.id}&limit=2&page=2`);
+    expect(second.body.data).toHaveLength(1);
+    expect(second.body.data[0].id).toBeLessThan(first.body.data[1].id);
+    expect(first.body.data[0]).not.toHaveProperty('requestHash');
+  });
+
+  it.each(['page=0', 'limit=0', 'limit=101', 'page=x'])('400 for %s', async (q) => {
+    expect((await get(`/api/transactions?${q}`)).status).toBe(400);
   });
 });

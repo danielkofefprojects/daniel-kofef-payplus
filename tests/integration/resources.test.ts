@@ -11,15 +11,15 @@ describe('merchants', () => {
 
     expect((await get(`/api/merchants/${created.body.id}`)).body.name).toBe('Acme');
     const list = await get('/api/merchants');
-    expect(list.body.map((m: any) => m.id)).toContain(created.body.id);
+    expect(list.body.data.map((m: any) => m.id)).toContain(created.body.id);
   });
 
   it('filters by status', async () => {
     const m = await createMerchant();
     await patch(`/api/merchants/${m.id}/status`, { status: 'INACTIVE' });
     const inactive = await get('/api/merchants?status=INACTIVE');
-    expect(inactive.body.every((x: any) => x.status === 'INACTIVE')).toBe(true);
-    expect(inactive.body.map((x: any) => x.id)).toContain(m.id);
+    expect(inactive.body.data.every((x: any) => x.status === 'INACTIVE')).toBe(true);
+    expect(inactive.body.data.map((x: any) => x.id)).toContain(m.id);
   });
 
   it('status update is idempotent', async () => {
@@ -110,9 +110,9 @@ describe('wallets', () => {
     await patch(`/api/wallets/${usd.id}/status`, { status: 'INACTIVE' });
 
     const byMerchant = await get(`/api/wallets?merchantId=${m.id}`);
-    expect(byMerchant.body).toHaveLength(2);
-    expect((await get(`/api/wallets?merchantId=${m.id}&currency=usd`)).body.map((w: any) => w.id)).toEqual([usd.id]);
-    expect((await get(`/api/wallets?merchantId=${m.id}&status=ACTIVE`)).body.map((w: any) => w.id)).toEqual([ils.id]);
+    expect(byMerchant.body.data).toHaveLength(2);
+    expect((await get(`/api/wallets?merchantId=${m.id}&currency=usd`)).body.data.map((w: any) => w.id)).toEqual([usd.id]);
+    expect((await get(`/api/wallets?merchantId=${m.id}&status=ACTIVE`)).body.data.map((w: any) => w.id)).toEqual([ils.id]);
   });
 
   it('404 / 400 on lookups and status updates', async () => {
@@ -133,5 +133,31 @@ describe('routing', () => {
     const res = await api('GET', '/api/nope');
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('pagination', () => {
+  it('pages merchants newest first and reports totals', async () => {
+    const [a, b, c] = [await createMerchant(), await createMerchant(), await createMerchant()];
+    const first = await get('/api/merchants?limit=2');
+    expect(first.body).toMatchObject({ page: 1, limit: 2 });
+    expect(first.body.data.map((m: any) => m.id)).toEqual([c.id, b.id]);
+    expect(first.body.totalPages).toBe(Math.ceil(first.body.total / 2));
+    const second = await get('/api/merchants?limit=2&page=2');
+    expect(second.body.data[0].id).toBe(a.id);
+  });
+
+  it('pages wallets within a filter', async () => {
+    const m = await createMerchant();
+    for (let i = 0; i < 3; i++) await createWallet(m.id, 'ILS');
+    const res = await get(`/api/wallets?merchantId=${m.id}&limit=2&page=2`);
+    expect(res.body).toMatchObject({ page: 2, limit: 2, total: 3, totalPages: 2 });
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it.each(['/api/merchants', '/api/wallets'])('400 for a bad page or limit on %s', async (path) => {
+    for (const q of ['page=0', 'limit=0', 'limit=101', 'page=x']) {
+      expect((await get(`${path}?${q}`)).status).toBe(400);
+    }
   });
 });

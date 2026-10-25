@@ -191,6 +191,7 @@ Approved example:
 | `WALLET_MERCHANT_MISMATCH` | the wallet belongs to a different merchant than `merchantId` |
 | `CURRENCY_MISMATCH` | charge currency ≠ wallet currency |
 | `INSUFFICIENT_FUNDS` | charge amount > wallet balance |
+| `ORIGINAL_NOT_REFUNDABLE` | refund target isn't an approved charge (a declined charge, or a refund) |
 | `REFUND_EXCEEDS_ORIGINAL` | refund would bring total refunds above the charge amount |
 
 ---
@@ -200,15 +201,15 @@ Approved example:
 | Endpoint | Query filters (all optional) |
 |---|---|
 | `GET /wallets/:id` | |
-| `GET /wallets` | `status`, `merchantId`, `currency` |
+| `GET /wallets` | `page` (default 1), `limit` (default 20, max 100), `status`, `merchantId`, `currency` |
 | `GET /merchants/:id` | |
-| `GET /merchants` | `status` |
+| `GET /merchants` | `page` (default 1), `limit` (default 20, max 100), `status` |
 | `GET /transactions/:id` | |
-| `GET /transactions` | `walletId`, `merchantId`, `type` (`CHARGE`/`REFUND`), `status` (`APPROVED`/`DECLINED`) |
+| `GET /transactions` | `page` (default 1), `limit` (default 20, max 100), `walletId`, `merchantId`, `type` (`CHARGE`/`REFUND`), `status` (`APPROVED`/`DECLINED`) |
 
 | `GET /ledger` | `page` (default 1), `limit` (default 20, max 100), `walletId`, `transactionId`, `type` (`CHARGE`/`REFUND`) |
 
-List endpoints return a plain JSON array, newest first. The exception is `GET /ledger`, which is paginated:
+Every list endpoint is paginated (offset-based) and returns newest first:
 
 ```json
 { "data": [{ "id": 1, "walletId": 1, "transactionId": 1, "type": "CHARGE", "amount": 500, "currency": "ILS", "timestamp": "2026-10-25 10:00:00",
@@ -243,8 +244,7 @@ The ledger is append-only: one entry per **approved** charge / refund (declined 
 | 404 | `NOT_FOUND` | wallet / merchant / transaction / route doesn't exist |
 | 409 | `CONFLICT` | Idempotency-Key reused with a different body |
 | 413 | `PAYLOAD_TOO_LARGE` | body over 10 KB |
-| 422 | `UNPROCESSABLE` | refund target isn't an approved charge |
-| 422 | a decline reason (`INSUFFICIENT_FUNDS`, `WALLET_INACTIVE`, `MERCHANT_INACTIVE`, `CURRENCY_MISMATCH`, `WALLET_MERCHANT_MISMATCH`, `REFUND_EXCEEDS_ORIGINAL`) | business rule failed; see Transactions |
+| 422 | a decline reason (`INSUFFICIENT_FUNDS`, `WALLET_INACTIVE`, `MERCHANT_INACTIVE`, `CURRENCY_MISMATCH`, `WALLET_MERCHANT_MISMATCH`, `ORIGINAL_NOT_REFUNDABLE`, `REFUND_EXCEEDS_ORIGINAL`) | business rule failed; see Transactions |
 
 ## Quick start (curl)
 

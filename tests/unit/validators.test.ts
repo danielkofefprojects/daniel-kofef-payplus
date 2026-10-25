@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { amount, currency, id, idParams, updateStatusSchema } from '../../src/validators/common';
 import { listLedgerQuery } from '../../src/validators/ledger.validators';
-import { createMerchantSchema } from '../../src/validators/merchant.validators';
+import { createMerchantSchema, listMerchantsQuery } from '../../src/validators/merchant.validators';
 import { chargeSchema, listTransactionsQuery, refundSchema } from '../../src/validators/transaction.validators';
-import { createWalletSchema } from '../../src/validators/wallet.validators';
+import { pageWindow, paginate } from '../../src/utils/pagination';
+import { createWalletSchema, listWalletsQuery } from '../../src/validators/wallet.validators';
 
 const validCharge = { walletId: 1, merchantId: 1, amount: 500, currency: 'ILS' };
 
@@ -141,5 +142,22 @@ describe('query schemas', () => {
     expect(listTransactionsQuery.safeParse({ status: 'DECLINED', type: 'CHARGE' }).success).toBe(true);
     expect(listTransactionsQuery.safeParse({ status: 'PENDING' }).success).toBe(false);
     expect(listTransactionsQuery.safeParse({ foo: 'bar' }).success).toBe(false);
+    expect(listTransactionsQuery.parse({})).toMatchObject({ page: 1, limit: 20 });
+  });
+});
+
+describe('pagination envelope', () => {
+  it('shares the same page / limit rules across every list query', () => {
+    for (const schema of [listTransactionsQuery, listLedgerQuery, listWalletsQuery, listMerchantsQuery]) {
+      expect(schema.parse({})).toMatchObject({ page: 1, limit: 20 });
+      expect(schema.safeParse({ limit: 101 }).success).toBe(false);
+      expect(schema.safeParse({ page: 0 }).success).toBe(false);
+    }
+  });
+
+  it('paginate() builds the envelope and computes totalPages', () => {
+    expect(paginate({ page: 2, limit: 10 }, ['x'], 11)).toEqual({ data: ['x'], page: 2, limit: 10, total: 11, totalPages: 2 });
+    expect(paginate({ page: 1, limit: 10 }, [], 0).totalPages).toBe(0);
+    expect(pageWindow({ page: 3, limit: 20 })).toEqual({ limit: 20, offset: 40 });
   });
 });

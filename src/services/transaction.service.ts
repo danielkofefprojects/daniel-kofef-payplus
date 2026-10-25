@@ -1,17 +1,19 @@
-import { and, desc, eq, gte, sql, sum } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql, sum } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   DeclineReason,
   ledgerEntries,
   merchants,
+  Status,
   TransactionStatus,
   transactions,
   TransactionType,
   wallets,
   type Transaction,
 } from '../db/schema';
-import { conflict, notFound, unprocessable } from '../utils/errors';
+import { conflict, notFound } from '../utils/errors';
 import { hashRequest } from '../utils/hash';
+import { pageWindow, paginate } from '../utils/pagination';
 import type {
   ChargeInput,
   ListTransactionsQuery,
@@ -123,8 +125,8 @@ export const transactionService = {
       const reason =
         firstFailure([
           [wallet.merchantId !== merchant.id, DeclineReason.WALLET_MERCHANT_MISMATCH],
-          [wallet.status !== 'ACTIVE', DeclineReason.WALLET_INACTIVE],
-          [merchant.status !== 'ACTIVE', DeclineReason.MERCHANT_INACTIVE],
+          [wallet.status !== Status.ACTIVE, DeclineReason.WALLET_INACTIVE],
+          [merchant.status !== Status.ACTIVE, DeclineReason.MERCHANT_INACTIVE],
           [wallet.currency !== input.currency, DeclineReason.CURRENCY_MISMATCH],
         ]) ?? (debit(tx, wallet.id, input.amount) ? null : DeclineReason.INSUFFICIENT_FUNDS);
 
@@ -151,10 +153,6 @@ export const transactionService = {
       const existing = findReplay(tx, original.merchantId, clientRequestId, requestHash);
       if (existing) return { transaction: existing, replayed: true };
 
-      if (original.type !== TransactionType.CHARGE || original.status !== TransactionStatus.APPROVED) {
-        throw unprocessable('Only approved charges can be refunded');
-      }
-
       const wallet = getWalletOrThrow(tx, original.walletId);
       const merchant = getMerchantOrThrow(tx, original.merchantId);
       const [{ refunded }] = tx
@@ -169,8 +167,12 @@ export const transactionService = {
         .all();
 
       const reason = firstFailure([
-        [wallet.status !== 'ACTIVE', DeclineReason.WALLET_INACTIVE],
-        [merchant.status !== 'ACTIVE', DeclineReason.MERCHANT_INACTIVE],
+        [
+          original.type !== TransactionType.CHARGE || original.status !== TransactionStatus.APPROVED,
+          DeclineReason.ORIGINAL_NOT_REFUNDABLE,
+        ],
+        [wallet.status !== Status.ACTIVE, DeclineReason.WALLET_INACTIVE],
+        [merchant.status !== Status.ACTIVE, DeclineReason.MERCHANT_INACTIVE],
         [(refunded ?? 0) + input.amount > original.amount, DeclineReason.REFUND_EXCEEDS_ORIGINAL],
       ]);
       if (!reason) credit(tx, wallet.id, input.amount);
@@ -193,15 +195,21 @@ export const transactionService = {
     });
   },
 
-  list({ walletId, merchantId, type, status }: ListTransactionsQuery) {
+  list({ walletId, merchantId, type, status, ...page }: ListTransactionsQuery) {
     const where = and(
       walletId ? eq(transactions.walletId, walletId) : undefined,
       merchantId ? eq(transactions.merchantId, merchantId) : undefined,
       type ? eq(transactions.type, type) : undefined,
       status ? eq(transactions.status, status) : undefined,
     );
-    return db.select().from(transactions).where(where)
-      .orderBy(desc(transactions.createdAt), desc(transactions.id)).all();
+    const { limit, offset } = pageWindow(page);
+    const data = db.select().from(transactions).where(where)
+      .orderBy(desc(transactions.createdAt), desc(transactions.id))
+      .limit(limit)
+      .offset(offset)
+      .all();
+    const [{ total }] = db.select({ total: count() }).from(transactions).where(where).all();
+    return paginate(page, data, total);
   },
 
   getById(id: number): Transaction {

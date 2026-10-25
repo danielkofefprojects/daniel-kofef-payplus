@@ -1,0 +1,483 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "bfafb460-38ea-4243-9701-6e360627befd",
+  "prevId": "7a1f1025-2661-4a8e-9669-0c15354dfa0f",
+  "tables": {
+    "ledger_entries": {
+      "name": "ledger_entries",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "ledger_entries_transaction_uq": {
+          "name": "ledger_entries_transaction_uq",
+          "columns": [
+            "transaction_id"
+          ],
+          "isUnique": true
+        },
+        "ledger_entries_wallet_idx": {
+          "name": "ledger_entries_wallet_idx",
+          "columns": [
+            "wallet_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ledger_entries_wallet_id_wallets_id_fk": {
+          "name": "ledger_entries_wallet_id_wallets_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "wallets",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ledger_entries_transaction_id_transactions_id_fk": {
+          "name": "ledger_entries_transaction_id_transactions_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "transactions",
+          "columnsFrom": [
+            "transaction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ledger_entries_amount_positive": {
+          "name": "ledger_entries_amount_positive",
+          "value": "\"ledger_entries\".\"amount\" > 0"
+        },
+        "ledger_entries_currency_valid": {
+          "name": "ledger_entries_currency_valid",
+          "value": "\"ledger_entries\".\"currency\" IN ('EUR', 'ILS', 'USD')"
+        },
+        "ledger_entries_type_valid": {
+          "name": "ledger_entries_type_valid",
+          "value": "\"ledger_entries\".\"type\" IN ('CHARGE', 'REFUND')"
+        }
+      }
+    },
+    "merchants": {
+      "name": "merchants",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ACTIVE'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "merchants_name_not_empty": {
+          "name": "merchants_name_not_empty",
+          "value": "length(trim(\"merchants\".\"name\")) > 0"
+        },
+        "merchants_status_valid": {
+          "name": "merchants_status_valid",
+          "value": "\"merchants\".\"status\" IN ('ACTIVE', 'INACTIVE')"
+        }
+      }
+    },
+    "transactions": {
+      "name": "transactions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "wallet_id": {
+          "name": "wallet_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "merchant_id": {
+          "name": "merchant_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decline_reason": {
+          "name": "decline_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "original_transaction_id": {
+          "name": "original_transaction_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "client_request_id": {
+          "name": "client_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "transactions_merchant_client_request_uq": {
+          "name": "transactions_merchant_client_request_uq",
+          "columns": [
+            "merchant_id",
+            "client_request_id"
+          ],
+          "isUnique": true
+        },
+        "transactions_wallet_idx": {
+          "name": "transactions_wallet_idx",
+          "columns": [
+            "wallet_id"
+          ],
+          "isUnique": false
+        },
+        "transactions_original_idx": {
+          "name": "transactions_original_idx",
+          "columns": [
+            "original_transaction_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "transactions_wallet_id_wallets_id_fk": {
+          "name": "transactions_wallet_id_wallets_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "wallets",
+          "columnsFrom": [
+            "wallet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_merchant_id_merchants_id_fk": {
+          "name": "transactions_merchant_id_merchants_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "merchants",
+          "columnsFrom": [
+            "merchant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_original_transaction_id_transactions_id_fk": {
+          "name": "transactions_original_transaction_id_transactions_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "transactions",
+          "columnsFrom": [
+            "original_transaction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "transactions_amount_positive": {
+          "name": "transactions_amount_positive",
+          "value": "\"transactions\".\"amount\" > 0"
+        },
+        "transactions_currency_valid": {
+          "name": "transactions_currency_valid",
+          "value": "\"transactions\".\"currency\" IN ('EUR', 'ILS', 'USD')"
+        },
+        "transactions_type_valid": {
+          "name": "transactions_type_valid",
+          "value": "\"transactions\".\"type\" IN ('CHARGE', 'REFUND')"
+        },
+        "transactions_status_valid": {
+          "name": "transactions_status_valid",
+          "value": "\"transactions\".\"status\" IN ('APPROVED', 'DECLINED')"
+        },
+        "transactions_refund_has_original": {
+          "name": "transactions_refund_has_original",
+          "value": "(\"transactions\".\"type\" = 'REFUND') = (\"transactions\".\"original_transaction_id\" IS NOT NULL)"
+        },
+        "transactions_decline_reason": {
+          "name": "transactions_decline_reason",
+          "value": "(\"transactions\".\"status\" = 'DECLINED') = (\"transactions\".\"decline_reason\" IS NOT NULL)"
+        },
+        "transactions_decline_reason_valid": {
+          "name": "transactions_decline_reason_valid",
+          "value": "\"transactions\".\"decline_reason\" IS NULL OR \"transactions\".\"decline_reason\" IN ('WALLET_INACTIVE', 'MERCHANT_INACTIVE', 'INSUFFICIENT_FUNDS', 'CURRENCY_MISMATCH', 'REFUND_EXCEEDS_ORIGINAL', 'ORIGINAL_NOT_REFUNDABLE', 'WALLET_MERCHANT_MISMATCH')"
+        }
+      }
+    },
+    "wallets": {
+      "name": "wallets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "merchant_id": {
+          "name": "merchant_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "balance": {
+          "name": "balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ACTIVE'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "wallets_merchant_idx": {
+          "name": "wallets_merchant_idx",
+          "columns": [
+            "merchant_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "wallets_merchant_id_merchants_id_fk": {
+          "name": "wallets_merchant_id_merchants_id_fk",
+          "tableFrom": "wallets",
+          "tableTo": "merchants",
+          "columnsFrom": [
+            "merchant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "wallets_balance_non_negative": {
+          "name": "wallets_balance_non_negative",
+          "value": "\"wallets\".\"balance\" >= 0"
+        },
+        "wallets_currency_valid": {
+          "name": "wallets_currency_valid",
+          "value": "\"wallets\".\"currency\" IN ('EUR', 'ILS', 'USD')"
+        },
+        "wallets_status_valid": {
+          "name": "wallets_status_valid",
+          "value": "\"wallets\".\"status\" IN ('ACTIVE', 'INACTIVE')"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

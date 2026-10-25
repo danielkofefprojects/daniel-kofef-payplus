@@ -126,7 +126,7 @@ describe('POST /api/transactions/refund - not refundable', () => {
     const declined = await charge({ walletId: wallet.id, merchantId: merchant.id, amount: 500, currency: 'ILS' });
     const res = await refund({ originalTransactionId: declined.body.transaction.id, amount: 100 });
     expect(res.status).toBe(422);
-    expect(res.body.error.code).toBe('UNPROCESSABLE');
+    expect(res.body.error.code).toBe('ORIGINAL_NOT_REFUNDABLE');
     expect(await balanceOf(wallet.id)).toBe(100);
   });
 
@@ -135,7 +135,7 @@ describe('POST /api/transactions/refund - not refundable', () => {
     const r = await refund({ originalTransactionId: original.id, amount: 100 });
     const res = await refund({ originalTransactionId: r.body.id, amount: 50 });
     expect(res.status).toBe(422);
-    expect(res.body.error.code).toBe('UNPROCESSABLE');
+    expect(res.body.error.code).toBe('ORIGINAL_NOT_REFUNDABLE');
   });
 });
 
