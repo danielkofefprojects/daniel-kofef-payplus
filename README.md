@@ -65,8 +65,8 @@ It is a minimal tool and not very helpful beyond basic debugging: there are no l
 ## Business assumptions
 
 - **A wallet has one currency, fixed at creation** (`ILS`, `USD` or `EUR`). A transaction must use the wallet's currency; there is no conversion, so a mismatch is declined (`CURRENCY_MISMATCH`).
-- **Wallets start with a balance of 0**, and the balance changes only through approved transactions. There is no deposit or withdrawal endpoint.
-- **A charge credits the merchant's wallet** (a customer pays the merchant) and **a refund debits it**. The balance can never go below zero.
+- **A wallet's opening balance is set at creation** (`initialBalance`, default 0, minor units). After that the balance changes only through approved transactions; there is no deposit or withdrawal endpoint. The opening balance is not recorded as a ledger entry.
+- **A charge debits the wallet** and **a refund credits it back**. The balance can never go below zero.
 - **A refund refers to one approved charge** of the same wallet and currency. **Partial and multiple refunds are allowed**, as long as the running total of approved refunds never exceeds the original charge amount (otherwise `REFUND_EXCEEDS_ORIGINAL`).
 - **Merchants and wallets are never deleted**, only set to `INACTIVE`. An inactive merchant or wallet declines new transactions, but its history stays readable.
 - **Validation before moving money:**
@@ -74,10 +74,9 @@ It is a minimal tool and not very helpful beyond basic debugging: there are no l
   - Inactive merchant or wallet → declined.
   - Wallet of another merchant → declined (`WALLET_MERCHANT_MISMATCH`).
   - Currency differs from the wallet's → declined (`CURRENCY_MISMATCH`).
-  - Insufficient balance (refund) → declined.
+  - Insufficient balance (charge) → declined (`INSUFFICIENT_FUNDS`).
   - Refund of a non-approved charge, or above the original amount → declined.
   - Malformed input (bad amount, unsupported currency, missing `Idempotency-Key`) → `400`.
-- **A wallet belongs to the merchant that created it.** A transaction naming a wallet of another merchant is declined (`WALLET_MERCHANT_MISMATCH`).
 - **Every approved transaction produces exactly one ledger entry**; declined transactions produce none. Ledger entries are immutable.
 - **No authentication or authorization.** Any caller can act for any merchant; in production the merchant would be derived from the caller's credentials instead of the request body.
 - **No fees, taxes or per-transaction limits.**
@@ -88,6 +87,7 @@ It is a minimal tool and not very helpful beyond basic debugging: there are no l
 - `charge` and `refund` need an `Idempotency-Key` header (stored as `client_request_id`, unique per merchant).
   - Same key + same body → the original transaction is returned (`200`, `Idempotent-Replayed: true`); money is not moved again.
   - Same key + different body → `409`.
+  - To tell these two cases apart, each transaction stores a SHA-256 `request_hash` of the request (type + body). A key alone only proves "seen before"; the hash proves "the same request", so a reused key can't silently replay a different amount. The hash is internal and never returned by the API. It is computed from the validated body in schema field order, so reordering fields in a validator schema would change hashes of stored rows.
 - **Convention:** a request that is well-formed and refers to existing records, but breaks a business rule, is saved as a `DECLINED` transaction (so it is auditable and replayable).
   Malformed requests (`400`), unknown wallet / merchant / transaction (`404`) and idempotency-key reuse with a different body (`409`) are plain errors and store nothing.
 - Business-rule failures (inactive wallet or merchant, insufficient funds, currency mismatch, refund over the original amount,
@@ -105,13 +105,15 @@ Full payloads, rules and error codes: **[docs/API.md](docs/API.md)**
 POST  /merchants              GET /merchants        GET /merchants/:id     PATCH /merchants/:id/status
 POST  /wallets                GET /wallets          GET /wallets/:id       PATCH /wallets/:id/status
 POST  /transactions/charge    POST /transactions/refund
-GET   /transactions           (paginated)      GET /transactions/:id
-GET   /ledger                 (paginated, append-only)
+GET   /transactions           GET /transactions/:id
+GET   /ledger                 (append-only)
 ```
+
+All list endpoints are paginated (see [Pagination](#pagination)).
 
 ## Pagination
 
-`GET /transactions` and `GET /ledger` use **offset pagination** (`page` + `limit`, response includes `total` and `totalPages`).
+Every list endpoint (`/merchants`, `/wallets`, `/transactions`, `/ledger`) uses **offset pagination** (`page` + `limit`, response includes `total` and `totalPages`).
 That is fine at this data volume: it is simple, supports jumping to any page, and the cost of `OFFSET` is negligible.
 
 For a much larger volume we would switch to **cursor (keyset) pagination** (`?after=<last id>`, ordered by an indexed unique key):

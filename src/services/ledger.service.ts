@@ -16,7 +16,11 @@ export const ledgerService = {
     const { limit, offset } = pageWindow(page);
     // The merchant is the one who made the transaction.
     const data = db
-      .select({ ...getTableColumns(ledgerEntries), wallet: { status: wallets.status }, merchant: { name: merchants.name, status: merchants.status } })
+      .select({
+        ...getTableColumns(ledgerEntries),
+        wallet: { status: wallets.status },
+        merchant: { name: merchants.name, status: merchants.status },
+      })
       .from(ledgerEntries)
       .innerJoin(wallets, eq(wallets.id, ledgerEntries.walletId))
       .innerJoin(transactions, eq(transactions.id, ledgerEntries.transactionId))
